@@ -31,6 +31,23 @@ unsigned char *ihex2bin_buf(unsigned int *start_address, int *dst_len, FILE *inF
 
 unsigned int crc32(unsigned int crc, const void *buf, size_t size);
 
+uint32_t get32le(uint8_t *ptr)
+{
+  return
+    ((ptr[0] <<  0) |
+     (ptr[1] <<  8) |
+     (ptr[2] << 16) |
+     (ptr[3] << 24));
+}
+
+void set32le(uint8_t *ptr, uint32_t val)
+{
+  ptr[0] = (val >>  0) & 0xff;
+  ptr[1] = (val >>  8) & 0xff;
+  ptr[2] = (val >> 16) & 0xff;
+  ptr[3] = (val >> 24) & 0xff;
+}
+
 //efab5b0739a834bac702aeb5cd08ffe227908faaae501f910e7e07d8d41fbb06
 int main (int argc, char **argv) {
   int i, c, vid =0x0483, pid = 0xdf11, ver = 0xffff;

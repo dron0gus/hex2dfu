@@ -377,7 +377,7 @@ void print_help(void) {
   printf("(c) Encedo Ltd 2013-2015\r\n");
 	printf("Options:\r\n");
 	printf("-J        - output in JSON structure except errors (optional)\r\n");
-	printf("-c        - place CRC23 under this addres (optional)\r\n");
+	printf("-c        - place CRC32 under this addres (optional)\r\n");
 	printf("-d        - file version number (optional, default: 0xFFFF)\r\n");
 	printf("-h        - help\r\n");
 	printf("-i        - Target0 HEX file name (mandatory)\r\n");

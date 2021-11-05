@@ -55,7 +55,7 @@ int main (int argc, char **argv) {
   FILE *inFile, *outFile;
   unsigned char json_output = 0;
   char *in_hex[MAX_IN_HEX];
-  int image_cnt = 0;
+  int image_cnt = -1;
 
 #ifdef ED25519_SUPPORT
   unsigned char hash_buf[64];
@@ -68,6 +68,8 @@ int main (int argc, char **argv) {
   unsigned int tar_start_address[MAX_IN_HEX];
   int tar_len[MAX_IN_HEX];
   unsigned char *tar_buf[MAX_IN_HEX];
+  /* Vector area crc store offset for OpenBLT */
+  int vect_crc_offset[MAX_IN_HEX];
   int total_len = 0;
 
   unsigned char *dfu;
@@ -75,14 +77,15 @@ int main (int argc, char **argv) {
   unsigned int crc = 0, tmp, add_crc32 = 0;
 
   opterr = 0;
-  while ((c = getopt (argc, argv, "hv:p:d:i:l:o:c:S:P:eJ")) != -1) {
+  while ((c = getopt (argc, argv, "hv:p:d:i:l:o:C:c:S:P:eJ")) != -1) {
     switch (c) {
       case 'J':
         json_output = 1;
         break;
       case 'i':   //target input file names
-        in_hex[image_cnt] = optarg;
         image_cnt++;
+        in_hex[image_cnt] = optarg;
+        vect_crc_offset[image_cnt] = -1;
         break;
       case 'l':   //target0 label
         tar0_lab = optarg;
@@ -98,6 +101,13 @@ int main (int argc, char **argv) {
         break;
       case 'c':   //place crc32 at this address
         add_crc32 = strtol (optarg, NULL, 16);
+        break;
+      case 'C':
+        if (image_cnt < 0) {
+          fprintf (stderr, "input file should be defined first!\n");
+          return 1;
+        }
+        vect_crc_offset[image_cnt] = strtol(optarg, NULL, 16);
         break;
       case 'S':   //ED25519 secret (signing key), hex
 #ifndef ED25519_SUPPORT
@@ -137,6 +147,7 @@ int main (int argc, char **argv) {
     }
   }
 
+  image_cnt++;
   if (image_cnt == 0) {
     perror ("No input file(s) specifed.\n");
     return 0;
@@ -181,6 +192,31 @@ int main (int argc, char **argv) {
     if ((tar_buf[i] == NULL) || (tar_len[i] < 0)) {
       fprintf(stderr, "Failed to parse %s\n", in_hex[i]);
       return 0;
+    }
+
+    /* Add OpenBLT style vector table CRC at given offset */
+    if (vect_crc_offset[i] >= 0) {
+      uint8_t *ptr =  tar_buf[i];
+      uint32_t signature_checksum = 0;
+
+      if (vect_crc_offset[i] + 3 > tar_len[i]) {
+        fprintf(stderr, "CRC position is outside of image %d > %d\n", vect_crc_offset[i], tar_len[i]);
+      }
+
+      signature_checksum += get32le(ptr + 0x00);
+      signature_checksum += get32le(ptr + 0x04);
+      signature_checksum += get32le(ptr + 0x08);
+      signature_checksum += get32le(ptr + 0x0C);
+      signature_checksum += get32le(ptr + 0x10);
+      signature_checksum += get32le(ptr + 0x14);
+      signature_checksum += get32le(ptr + 0x18);
+      signature_checksum  = ~signature_checksum; /* one's complement */
+      signature_checksum += 1; /* two's complement */
+
+      /* store at given offset */
+      set32le(ptr + vect_crc_offset[i], signature_checksum);
+      printf("Element %d: adding OpenBLT-style crc @ 0x%08x: 0x%08x\r\n",
+        i, vect_crc_offset[i], signature_checksum);
     }
 
     total_len += tar_len[i];
@@ -394,6 +430,7 @@ void print_help(void) {
   printf("(c) Encedo Ltd 2013-2015\r\n");
 	printf("Options:\r\n");
 	printf("-J        - output in JSON structure except errors (optional)\r\n");
+	printf("-C        - place OpenBLT vector table CRC under this address (optional, per-input file)\r\n");
 	printf("-c        - place CRC32 under this addres (optional)\r\n");
 	printf("-d        - file version number (optional, default: 0xFFFF)\r\n");
 	printf("-h        - help\r\n");
